@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useInfiniteQuery, useQueryClient } from "react-query";
+import { useQuery, useQueryClient } from "react-query";
 import { PostDetail } from "./PostDetail";
 const maxPostPage = 10;
 
@@ -15,34 +15,25 @@ export function Posts() {
   const [selectedPost, setSelectedPost] = useState(null);
   const queryClient = useQueryClient();
 
-  const {
-    data,
-    isFetching,
-    error,
-    fetchNextPage,
-    fetchPreviousPage,
-    // if I change this key to ["posts", currentPage] then the pre-fetching works
-    // according to dev tool. But does that mean I can't use pageParam / getNextPageParam
-    // getPreviousPageParam ?
-  } = useInfiniteQuery("posts", () => fetchPosts(currentPage), {
-    staleTime: 5000,
-    // toggling keepPreviousData doesn't seem to have an effect on whether prefetching works
-    // when the key is "posts"
-    keepPreviousData: true,
-  });
+  const { data, isFetching, isLoading, error } = useQuery(
+    ["posts", currentPage],
+    () => fetchPosts(currentPage),
+    {
+      staleTime: 5000,
+      // If set, any previous data will be kept when fetching new data because the query key changed.
+      keepPreviousData: true,
+    }
+  );
 
   // Prefetch the next page
   useEffect(() => {
     if (currentPage < maxPostPage - 2) {
-      // I also change this key to ["posts", currentPage] to get pre-fetching to
-      // work
-      queryClient.prefetchInfiniteQuery("posts", () =>
-        fetchPosts(currentPage + 1)
-      );
+      const newPage = currentPage + 1;
+      queryClient.prefetchQuery(["posts", newPage], () => fetchPosts(newPage));
     }
   }, [currentPage, queryClient]);
 
-  if (isFetching) {
+  if (isLoading) {
     return <h3>Loading!</h3>;
   }
 
@@ -56,11 +47,10 @@ export function Posts() {
   }
 
   if (!data) return null;
-
   return (
     <>
       <ul>
-        {data.pages[0].map((post) => (
+        {data.map((post) => (
           <li
             key={post.id}
             className="post-title"
@@ -75,19 +65,18 @@ export function Posts() {
           disabled={currentPage < 1}
           onClick={() => {
             setCurrentPage(currentPage - 1);
-            // set pageParam so that fetchPreviousPage doesn't look for it in getPreviousPage.
-            // pageParam is never actually used here...
-            fetchPreviousPage({ pageParam: currentPage });
           }}
         >
           Previous page
         </button>
         <span>Page {currentPage + 1}</span>
+        {isFetching ? <span>loading...</span> : null}
         <button
+          // can use indicator from data (e.g. !data.nextPage) if available
           disabled={currentPage > maxPostPage - 2}
           onClick={() => {
+            console.log("setting current page to", currentPage + 1);
             setCurrentPage(currentPage + 1);
-            fetchNextPage({ pageParam: currentPage });
           }}
         >
           Next page
